@@ -24,17 +24,20 @@
 - K-Nearest Neighbours (K-NN)
 ![N|Solid](https://cdn-images-1.medium.com/max/1600/1*rmdr7RsUPOWranwOuuIl7w.png)
 - Support Vector Machine (SVM)
+
 ![N|Solid](https://www.researchgate.net/publication/309361744/figure/fig3/AS:614002350620688@1523400976304/Support-vector-machine-SVM-classifier.png)
 - Different Kernel SVM
 ![N|Solid](https://blog-c7ff.kxcdn.com/blog/wp-content/uploads/2017/02/kernel.png)
 - Naive Bayes
 ![N|Solid](https://cdn-images-1.medium.com/max/1200/1*ZW1icngckaSkivS0hXduIQ.jpeg)
 - Decision Tree Classification
+
 ![N|Solid](http://doc.perclass.com/perClass_Toolbox/guide/images/clas_sdtree_1.png)
 - Random Forest Classification
 ![N|Solid](http://luisvalesilva.com/datasimple/images/random_forests/random_forest.png)
 # Clustering
 - K-Means Clustering
+
 ![N|Solid](https://upload.wikimedia.org/wikipedia/commons/e/ea/K-means_convergence.gif)
 - Hierarchical Clustering
 ![N|Solid](https://uc-r.github.io/public/images/analytics/clustering/hierarchical/unnamed-chunk-13-1.png)
