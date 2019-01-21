@@ -48,11 +48,13 @@ for i in range(1,45000):
 vectorizer = TfidfVectorizer()
 X = vectorizer.fit_transform(preprocessedDocuments)
 
+
+'''
 def save_sparse_csr(filename, array):
     np.savez(filename, data=array.data, indices=array.indices,
              indptr=array.indptr, shape=array.shape)
 
-'''
+
 X=X.toarray()
 np.savetxt("tfid2.csv", X, delimiter=",")
 
@@ -67,16 +69,50 @@ true_k = 6
 model = KMeans(n_clusters=true_k, init='k-means++', max_iter=100, n_init=1)
 model.fit(X)
 
-words = []
+dictionary = []
 
-print("Top terms per cluster:")
+for i in range(true_k):
+    dictionary.append(gensim.corpora.Dictionary())
+    
 order_centroids = model.cluster_centers_.argsort()[:, ::-1]
 terms = vectorizer.get_feature_names()
 for i in range(true_k):
-    print("Cluster %d:" % i),
-    for ind in order_centroids[i, :5]:
-        print(' %s' % terms[ind]),
-    print
+    words = []
+    for ind in order_centroids[i, :5000]:
+        words.append([terms[ind]])
+    dictionary[i].add_documents(words)
+    
+count = 0
+for k, v in dictionary[2].iteritems():
+    print(k, v)
+    count += 1
+    if count > 10:
+        break
+    
+lda_models = [None] * true_k
+bow_corpus = [None] * true_k  
+  
+for i in range(true_k):
+    bow_corpus[i] = [dictionary[i].doc2bow(doc) for doc in words]
+    lda_models[i] = gensim.models.LdaMulticore(bow_corpus[i], num_topics=true_k, id2word=dictionary[i], passes=2, workers=2)
+  
+
+for idx, topic in lda_models[0].print_topics(-1):
+    print('Topic: {} \nWords: {}'.format(idx, topic))
+
+for i in range(1,45):
+    if data[i]["transcription"] is not "":
+        Y = vectorizer.transform([preprocess(data[i]["transcription"])])
+        prediction = model.predict(Y)
+        print(prediction)
+        documents.append(data[i]["transcription"])
+        preprocessedDocuments.append(preprocess(data[i]["transcription"]))
+        bow_corpus_predict = [dictionary[i].doc2bow(doc) for doc in words]
+        for index, score in sorted(lda_models[prediction[0]][bow_corpus_predict], key=lambda tup: -1*tup[1])[0]:
+            print("Score: {}\t Topic: {}".format(score, lda_models[prediction[0]].print_topic(index, 5)))
+
+
+
 
 print("\n")
 print("Prediction")
