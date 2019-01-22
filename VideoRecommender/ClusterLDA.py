@@ -40,8 +40,9 @@ stemmer = SnowballStemmer("spanish")
 documents = []
 preprocessedDocuments = []
 
-for i in range(1,45000):
+for i in range(1,450):
     if data[i]["transcription"] is not "":
+        print(i)
         documents.append(data[i]["transcription"])
         preprocessedDocuments.append(preprocess(data[i]["transcription"]))
         
@@ -100,27 +101,36 @@ for i in range(true_k):
 for idx, topic in lda_models[0].print_topics(-1):
     print('Topic: {} \nWords: {}'.format(idx, topic))
 
-for i in range(1,45):
+for i in range(1,10):
     if data[i]["transcription"] is not "":
         Y = vectorizer.transform([preprocess(data[i]["transcription"])])
         prediction = model.predict(Y)
-        print(prediction)
-        documents.append(data[i]["transcription"])
-        preprocessedDocuments.append(preprocess(data[i]["transcription"]))
-        bow_corpus_predict = [dictionary[i].doc2bow(doc) for doc in words]
+        print('Cluster :{}'.format(prediction))
+        #documents.append(data[i]["transcription"])
+        #preprocessedDocuments.append(preprocess(data[i]["transcription"]))
+        bow_corpus_predict = [dictionary[prediction[0]].doc2bow(doc) for doc in words]
         for index, score in sorted(lda_models[prediction[0]][bow_corpus_predict], key=lambda tup: -1*tup[1])[0]:
             print("Score: {}\t Topic: {}".format(score, lda_models[prediction[0]].print_topic(index, 5)))
+        print()
 
 
-
-
+'''
 print("\n")
 print("Prediction")
 
 Y = vectorizer.transform(["chrome browser to open."])
 prediction = model.predict(Y)
 print(prediction)
+'''
 
-Y = vectorizer.transform(["My cat is hungry."])
-prediction = model.predict(Y)
-print(prediction)
+file = open("result_silhouette_score.csv", "w")
+mx = 999999999
+
+for j in range(1, 11):
+            kmeans = KMeans(n_clusters=i, random_state=j).fit(data)
+            labels = kmeans.labels_
+            if mx > kmeans.inertia_:
+                mx = kmeans.inertia_
+                lx = kmeans.labels_
+
+file.write(str(i) + "," + str(metrics.silhouette_score(data, lx)) + "\n")
