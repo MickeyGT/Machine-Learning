@@ -20,6 +20,7 @@ import pandas as pd
 import numpy as np
 import scipy.sparse
 from scipy.sparse import csr_matrix
+import re
 
 def lemmatize_stemming(text):
     return stemmer.stem(WordNetLemmatizer().lemmatize(text, pos='v'))
@@ -39,12 +40,17 @@ stemmer = SnowballStemmer("spanish")
 
 documents = []
 preprocessedDocuments = []
+preprocessedDocumentsList = []
 
-for i in range(1,450):
+for i in range(1,45000):
     if data[i]["transcription"] is not "":
-        print(i)
         documents.append(data[i]["transcription"])
         preprocessedDocuments.append(preprocess(data[i]["transcription"]))
+        wordList = re.sub("[^\w]", " ",  preprocess(data[i]["transcription"])).split()
+        words = []
+        for word in wordList:
+            words.append(word)
+        preprocessedDocumentsList.append(words)
         
 vectorizer = TfidfVectorizer()
 X = vectorizer.fit_transform(preprocessedDocuments)
@@ -67,24 +73,59 @@ scipy.sparse.save_npz('matrix.npz',X,False)
 '''
 
 true_k = 6
-model = KMeans(n_clusters=true_k, init='k-means++', max_iter=100, n_init=1)
+model = KMeans(n_clusters=true_k, init='k-means++', max_iter=300, n_init=10)
 model.fit(X)
 
+
+
+clusterWords = [None] * true_k
 dictionary = []
+preprocessedListForDictionary = []
 
 for i in range(true_k):
-    dictionary.append(gensim.corpora.Dictionary())
-    
+    preprocessedListForDictionary.append([])
+
+nr=0
+for i in range(1,45000):
+    if data[i]["transcription"] is not "":
+        Y = vectorizer.transform([preprocess(data[i]["transcription"])])
+        prediction = model.predict(Y)
+        preprocessedListForDictionary[prediction[0]].append(preprocessedDocumentsList[nr])
+        nr+=1
+        '''
+        wordList = re.sub("[^\w]", " ", preprocess(data[i]["transcription"])).split()
+        words = []
+        for word in wordList:
+            words.append([word])
+        dictionary[prediction[0]].add_documents(words)
+        words = []
+        for word in wordList:
+            words.append(word)
+        clusterWords[prediction[0]].append(words)
+        '''
+
+for i in range(true_k):
+    dictionary.append(gensim.corpora.Dictionary(preprocessedListForDictionary[i]))
+    clusterWords[i]=[]
+
+
+'''    
 order_centroids = model.cluster_centers_.argsort()[:, ::-1]
 terms = vectorizer.get_feature_names()
+
+clusterWords = [None] * true_k
+
+
 for i in range(true_k):
     words = []
     for ind in order_centroids[i, :5000]:
         words.append([terms[ind]])
     dictionary[i].add_documents(words)
-    
+    clusterWords[i]=words
+'''
+
 count = 0
-for k, v in dictionary[2].iteritems():
+for k, v in dictionary[3].iteritems():
     print(k, v)
     count += 1
     if count > 10:
@@ -92,10 +133,14 @@ for k, v in dictionary[2].iteritems():
     
 lda_models = [None] * true_k
 bow_corpus = [None] * true_k  
+corpus_tfidf = [None] * true_k
+tfidf_models = [None] * true_k
   
 for i in range(true_k):
-    bow_corpus[i] = [dictionary[i].doc2bow(doc) for doc in words]
-    lda_models[i] = gensim.models.LdaMulticore(bow_corpus[i], num_topics=true_k, id2word=dictionary[i], passes=2, workers=2)
+    bow_corpus[i] = [dictionary[i].doc2bow(doc) for doc in preprocessedListForDictionary[i]]
+    tfidf_models[i] = gensim.models.TfidfModel(bow_corpus[i])
+    corpus_tfidf[i]= tfidf_models[i][bow_corpus[i]]
+    lda_models[i] = gensim.models.LdaMulticore(corpus_tfidf[i], num_topics=10, id2word=dictionary[i], passes=2, workers=4)
   
 
 for idx, topic in lda_models[0].print_topics(-1):
@@ -108,11 +153,66 @@ for i in range(1,10):
         print('Cluster :{}'.format(prediction))
         #documents.append(data[i]["transcription"])
         #preprocessedDocuments.append(preprocess(data[i]["transcription"]))
-        bow_corpus_predict = [dictionary[prediction[0]].doc2bow(doc) for doc in words]
-        for index, score in sorted(lda_models[prediction[0]][bow_corpus_predict], key=lambda tup: -1*tup[1])[0]:
+        wordList = re.sub("[^\w]", " ",  data[i]["transcription"]).split()
+        words = []
+        for word in wordList:
+            words.append(word)
+        bow_corpus_predict = dictionary[prediction[0]].doc2bow(words)
+        for index, score in sorted(lda_models[prediction[0]][bow_corpus_predict], key=lambda tup: -1*tup[1]):
             print("Score: {}\t Topic: {}".format(score, lda_models[prediction[0]].print_topic(index, 5)))
         print()
 
+
+count = 0
+for k, v in dictionary.iteritems():
+    print(k, v)
+    count += 1
+    if count > 10:
+        break
+
+querryDataFrame = pd.DataFrame(columns=['VideoID','Assigned Cluster','CorrLDA Scores'])
+#a1 = pd.DataFrame([[0,1,[1,2,3]]],columns=['VideoID','Assigned Cluster','CorrLDA Scores'])
+#querryDataFrame = querryDataFrame.append(a1,ignore_index = True)
+
+for i in range(1,45000):
+    if data[i]["transcription"] is not "":
+        Y = vectorizer.transform([preprocess(data[i]["transcription"])])
+        prediction = model.predict(Y)
+        wordList = re.sub("[^\w]", " ",  data[i]["transcription"]).split()
+        words = []
+        for word in wordList:
+            words.append(word)
+        bow_corpus_predict = dictionary[prediction[0]].doc2bow(words)
+        newLine = pd.DataFrame([[i,prediction[0],lda_models[prediction[0]][bow_corpus_predict]]],columns=['VideoID','Assigned Cluster','CorrLDA Scores'])
+        querryDataFrame = querryDataFrame.append(newLine,ignore_index = True)
+
+querry = 'permanente para la protección de los animales en cría instituido'
+Y = vectorizer.transform([preprocess(querry)])
+querryCluster = model.predict(Y)[0]
+wordList = re.sub("[^\w]", " ", preprocess(querry)).split()
+words = []
+for word in wordList:
+    words.append(word)
+bow_corpus_querry = dictionary[querryCluster].doc2bow(words)
+querryScoresList = lda_models[querryCluster][bow_corpus_querry]
+querryScores = {}
+for score in querryScoresList:
+    querryScores[score[0]]=score[1]
+    
+    
+scoreDifferences = {}
+for index,entry in querryDataFrame.iterrows():
+    if entry['Assigned Cluster'] == querryCluster:
+        totalScore=0
+        for score in querryDataFrame.at[index,'CorrLDA Scores']:
+            if score[0] in querryScores:
+                totalScore += abs(score[1]-querryScores[score[0]])
+            else:
+                totalScore +=0.1
+        scoreDifferences[entry['VideoID']]=totalScore
+
+import operator    
+sorted_x = sorted(scoreDifferences.items(), key=operator.itemgetter(1))
 
 '''
 print("\n")
@@ -121,16 +221,5 @@ print("Prediction")
 Y = vectorizer.transform(["chrome browser to open."])
 prediction = model.predict(Y)
 print(prediction)
+
 '''
-
-file = open("result_silhouette_score.csv", "w")
-mx = 999999999
-
-for j in range(1, 11):
-            kmeans = KMeans(n_clusters=i, random_state=j).fit(data)
-            labels = kmeans.labels_
-            if mx > kmeans.inertia_:
-                mx = kmeans.inertia_
-                lx = kmeans.labels_
-
-file.write(str(i) + "," + str(metrics.silhouette_score(data, lx)) + "\n")
