@@ -162,13 +162,14 @@ for i in range(1,10):
             print("Score: {}\t Topic: {}".format(score, lda_models[prediction[0]].print_topic(index, 5)))
         print()
 
-
+'''
 count = 0
 for k, v in dictionary.iteritems():
     print(k, v)
     count += 1
     if count > 10:
         break
+'''
 
 querryDataFrame = pd.DataFrame(columns=['VideoID','Assigned Cluster','CorrLDA Scores'])
 #a1 = pd.DataFrame([[0,1,[1,2,3]]],columns=['VideoID','Assigned Cluster','CorrLDA Scores'])
@@ -186,7 +187,7 @@ for i in range(1,45000):
         newLine = pd.DataFrame([[i,prediction[0],lda_models[prediction[0]][bow_corpus_predict]]],columns=['VideoID','Assigned Cluster','CorrLDA Scores'])
         querryDataFrame = querryDataFrame.append(newLine,ignore_index = True)
 
-querry = 'permanente para la protección de los animales en cría instituido'
+querry = 'Ciencias de la Computación'
 Y = vectorizer.transform([preprocess(querry)])
 querryCluster = model.predict(Y)[0]
 wordList = re.sub("[^\w]", " ", preprocess(querry)).split()
@@ -194,7 +195,8 @@ words = []
 for word in wordList:
     words.append(word)
 bow_corpus_querry = dictionary[querryCluster].doc2bow(words)
-querryScoresList = lda_models[querryCluster][bow_corpus_querry]
+bow_corpus_querry_tfidf= tfidf_models[querryCluster][bow_corpus_querry]
+querryScoresList = lda_models[querryCluster][bow_corpus_querry_tfidf]
 querryScores = {}
 for score in querryScoresList:
     querryScores[score[0]]=score[1]
