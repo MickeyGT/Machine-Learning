@@ -15,8 +15,6 @@ from sklearn.metrics import adjusted_rand_score
 import gensim
 from gensim.utils import simple_preprocess
 from gensim.parsing.preprocessing import STOPWORDS
-from nltk.stem import WordNetLemmatizer, SnowballStemmer
-from nltk.stem.porter import *
 import pandas as pd
 import numpy as np
 import scipy.sparse
@@ -27,64 +25,47 @@ from overrides import overrides
 import tensorflow_hub as hub
 import tensorflow as tf
 
+def preprocess(text):
+    result = ""
+    for token in gensim.utils.simple_preprocess(text):
+        if token not in gensim.parsing.preprocessing.STOPWORDS and len(token) > 3:
+            result=result+' '+token
+    return result
 
+#Opening the file with all the data about the videos.
 with open('videos_upv_cleaned.json') as f:
 	data = json.load(f)
 
-#stemmer = SnowballStemmer("spanish")
-
 documents = []
-preprocessedDocuments = []
 preprocessedDocumentsList = []
+nrOfTranscriptsToProcess = 450
 
 embed = hub.Module("https://tfhub.dev/google/nnlm-es-dim128-with-normalization/1")
 
-for i in range(1,45000):
+for i in range(1,nrOfTranscriptsToProcess):
     if data[i]["transcription"] is not "":
-        documents.append(data[i]["transcription"])
-        preprocessedDocuments.append(data[i]["transcription"])
-        '''
-        wordList = re.sub("[^\w]", " ",  data[i]["transcription"]).split()
+        preprocessedTranscript = preprocess(data[i]["transcription"])
+        documents.append(preprocessedTranscript)
+        wordList = re.sub("[^\w]", " ",  preprocessedTranscript).split()
         words = []
         for word in wordList:
             words.append(word)
         preprocessedDocumentsList.append(words)
-        '''
+
+#Using word embedding on all the transcripts
         
-
 X = []
-
 with tf.Session() as session:
     session.run([tf.global_variables_initializer(), tf.tables_initializer()])
-    X = session.run(embed(preprocessedDocuments))        
+    X = session.run(embed(documents))        
 
-data_folder = "C:\\Users\\Visiting\\Desktop\\ELMoForManyLangs-master\\145"
-e = Embedder(data_folder)
-sents = preprocessedDocumentsList
-# the list of lists which store the sentences 
-# after segment if necessary.
 
-e.sents2elmo(sents)
-# will return a list of numpy arrays 
-# each with the shape=(seq_len, embedding_size)
-        
-vectorizer = TfidfVectorizer()
-X = vectorizer.fit_transform(preprocessedDocuments)
-
-'''
-def save_sparse_csr(filename, array):
-    np.savez(filename, data=array.data, indices=array.indices,
-             indptr=array.indptr, shape=array.shape)
-X=X.toarray()
-np.savetxt("tfid2.csv", X, delimiter=",")
-scipy.sparse.save_npz("matrix.npz", X)
-save_sparse_csr('D:\Machine Learning\VideoRecommender\matrix',X);
-scipy.sparse.save_npz('matrix.npz',X,False)
-'''
-
-true_k = 6
+#Clustering
+true_k = 8
 model = KMeans(n_clusters=true_k, init='k-means++', max_iter=300, n_init=3,verbose=True)
 model.fit(X)
+
+#Separating the transcript variables according to the cluster they belong into 
 
 clusterWords = [None] * true_k
 dictionary = []
@@ -93,26 +74,27 @@ preprocessedListForDictionary = []
 for i in range(true_k):
     preprocessedListForDictionary.append([])
 
-nr=0
-for i in range(1,45000):
-    if data[i]["transcription"] is not "":
-        with tf.Session() as session:
-            session.run([tf.global_variables_initializer(), tf.tables_initializer()])
-            Y = session.run(embed(data[i]["transcription"]))
-        prediction = model.predict(Y)
-        preprocessedListForDictionary[prediction[0]].append(preprocessedDocumentsList[nr])
-        nr+=1
-        '''
-        wordList = re.sub("[^\w]", " ", preprocess(data[i]["transcription"])).split()
-        words = []
-        for word in wordList:
-            words.append([word])
-        dictionary[prediction[0]].add_documents(words)
-        words = []
-        for word in wordList:
-            words.append(word)
-        clusterWords[prediction[0]].append(words)
-        '''
+Y=[]
+with tf.Session() as session:
+    session.run([tf.global_variables_initializer(), tf.tables_initializer()])
+    nr=0
+    for i in range(1,nrOfTranscriptsToProcess):
+        if data[i]["transcription"] is not "":      
+            Y = session.run(embed([preprocess(data[i]["transcription"])]))
+            prediction = model.predict(Y)
+            preprocessedListForDictionary[prediction[0]].append(preprocessedDocumentsList[nr])
+            nr+=1
+            '''
+            wordList = re.sub("[^\w]", " ", preprocess(data[i]["transcription"])).split()
+            words = []
+            for word in wordList:
+                words.append([word])
+            dictionary[prediction[0]].add_documents(words)
+            words = []
+            for word in wordList:
+                words.append(word)
+            clusterWords[prediction[0]].append(words)
+            '''
 
 for i in range(true_k):
     dictionary.append(gensim.corpora.Dictionary(preprocessedListForDictionary[i]))
@@ -144,14 +126,15 @@ tfidf_models = [None] * true_k
   
 for i in range(true_k):
     bow_corpus[i] = [dictionary[i].doc2bow(doc) for doc in preprocessedListForDictionary[i]]
-    tfidf_models[i] = gensim.models.TfidfModel(bow_corpus[i])
-    corpus_tfidf[i]= tfidf_models[i][bow_corpus[i]]
-    lda_models[i] = gensim.models.LdaMulticore(corpus_tfidf[i], num_topics=10, id2word=dictionary[i], passes=2, workers=4)
-  
+    #tfidf_models[i] = gensim.models.TfidfModel(bow_corpus[i])
+    #corpus_tfidf[i]= tfidf_models[i][bow_corpus[i]]
+    lda_models[i] = gensim.models.LdaMulticore(bow_corpus[i], num_topics=5, id2word=dictionary[i], passes=10, workers=10)
+    print("Cluster ",i)
 
 for idx, topic in lda_models[0].print_topics(-1):
     print('Topic: {} \nWords: {}'.format(idx, topic))
 
+'''
 for i in range(1,10):
     if data[i]["transcription"] is not "":
         Y = vectorizer.transform([preprocess(data[i]["transcription"])])
@@ -167,6 +150,7 @@ for i in range(1,10):
         for index, score in sorted(lda_models[prediction[0]][bow_corpus_predict], key=lambda tup: -1*tup[1]):
             print("Score: {}\t Topic: {}".format(score, lda_models[prediction[0]].print_topic(index, 5)))
         print()
+'''
 
 '''
 count = 0
@@ -181,19 +165,26 @@ querryDataFrame = pd.DataFrame(columns=['VideoID','Assigned Cluster','CorrLDA Sc
 #a1 = pd.DataFrame([[0,1,[1,2,3]]],columns=['VideoID','Assigned Cluster','CorrLDA Scores'])
 #querryDataFrame = querryDataFrame.append(a1,ignore_index = True)
 
-for i in range(1,45000):
-    if data[i]["transcription"] is not "":
-        Y = vectorizer.transform([preprocess(data[i]["transcription"])])
-        prediction = model.predict(Y)
-        wordList = re.sub("[^\w]", " ",  data[i]["transcription"]).split()
-        words = []
-        for word in wordList:
-            words.append(word)
-        bow_corpus_predict = dictionary[prediction[0]].doc2bow(words)
-        newLine = pd.DataFrame([[i,prediction[0],lda_models[prediction[0]][bow_corpus_predict]]],columns=['VideoID','Assigned Cluster','CorrLDA Scores'])
-        querryDataFrame = querryDataFrame.append(newLine,ignore_index = True)
+
+Y=[]
+with tf.Session() as session:
+    session.run([tf.global_variables_initializer(), tf.tables_initializer()])
+    for i in range(1,nrOfTranscriptsToProcess):
+        if data[i]["transcription"] is not "":
+            #Y = vectorizer.transform([preprocess(data[i]["transcription"])])
+            Y=[]
+            Y = session.run(embed([data[i]["transcription"]]))
+            prediction = model.predict(Y)
+            wordList = re.sub("[^\w]", " ",  data[i]["transcription"]).split()
+            words = []
+            for word in wordList:
+                words.append(word)
+            bow_corpus_predict = dictionary[prediction[0]].doc2bow(words)
+            newLine = pd.DataFrame([[i,prediction[0],lda_models[prediction[0]][bow_corpus_predict]]],columns=['VideoID','Assigned Cluster','CorrLDA Scores'])
+            querryDataFrame = querryDataFrame.append(newLine,ignore_index = True)
 
 querry = 'Ciencias de la Computación'
+Y = session.run(embed([querry]))
 Y = vectorizer.transform([querry])
 querryCluster = model.predict(Y)[0]
 wordList = re.sub("[^\w]", " ", querry).split()
@@ -221,11 +212,3 @@ for index,entry in querryDataFrame.iterrows():
 
 import operator    
 sorted_x = sorted(scoreDifferences.items(), key=operator.itemgetter(1))
-
-'''
-print("\n")
-print("Prediction")
-Y = vectorizer.transform(["chrome browser to open."])
-prediction = model.predict(Y)
-print(prediction)
-'''
