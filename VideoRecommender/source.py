@@ -131,7 +131,7 @@ for i in range(true_k):
     lda_models[i] = gensim.models.LdaMulticore(bow_corpus[i], num_topics=5, id2word=dictionary[i], passes=10, workers=10)
     print("Cluster ",i)
 
-for idx, topic in lda_models[0].print_topics(-1):
+for idx, topic in lda_models[1].print_topics(-1):
     print('Topic: {} \nWords: {}'.format(idx, topic))
 
 '''
@@ -165,35 +165,34 @@ querryDataFrame = pd.DataFrame(columns=['VideoID','Assigned Cluster','CorrLDA Sc
 #a1 = pd.DataFrame([[0,1,[1,2,3]]],columns=['VideoID','Assigned Cluster','CorrLDA Scores'])
 #querryDataFrame = querryDataFrame.append(a1,ignore_index = True)
 
+nr=0
+for i in range(1,nrOfTranscriptsToProcess):
+    if data[i]["transcription"] is not "":
+        #Y = vectorizer.transform([preprocess(data[i]["transcription"])])
+        prediction = model.predict(X[nr].reshape(1,-1))
+        nr+=1
+        wordList = re.sub("[^\w]", " ",  data[i]["transcription"]).split()
+        words = []
+        for word in wordList:
+            words.append(word)
+        bow_corpus_predict = dictionary[prediction[0]].doc2bow(words)
+        newLine = pd.DataFrame([[i,prediction[0],lda_models[prediction[0]][bow_corpus_predict]]],columns=['VideoID','Assigned Cluster','CorrLDA Scores'])
+        querryDataFrame = querryDataFrame.append(newLine,ignore_index = True)
 
+
+querry = 'Ciencias de la Computación'
 Y=[]
 with tf.Session() as session:
     session.run([tf.global_variables_initializer(), tf.tables_initializer()])
-    for i in range(1,nrOfTranscriptsToProcess):
-        if data[i]["transcription"] is not "":
-            #Y = vectorizer.transform([preprocess(data[i]["transcription"])])
-            Y=[]
-            Y = session.run(embed([data[i]["transcription"]]))
-            prediction = model.predict(Y)
-            wordList = re.sub("[^\w]", " ",  data[i]["transcription"]).split()
-            words = []
-            for word in wordList:
-                words.append(word)
-            bow_corpus_predict = dictionary[prediction[0]].doc2bow(words)
-            newLine = pd.DataFrame([[i,prediction[0],lda_models[prediction[0]][bow_corpus_predict]]],columns=['VideoID','Assigned Cluster','CorrLDA Scores'])
-            querryDataFrame = querryDataFrame.append(newLine,ignore_index = True)
-
-querry = 'Ciencias de la Computación'
-Y = session.run(embed([querry]))
-Y = vectorizer.transform([querry])
+    Y = session.run(embed([querry]))
+#Y = vectorizer.transform([querry])
 querryCluster = model.predict(Y)[0]
 wordList = re.sub("[^\w]", " ", querry).split()
 words = []
 for word in wordList:
     words.append(word)
 bow_corpus_querry = dictionary[querryCluster].doc2bow(words)
-bow_corpus_querry_tfidf= tfidf_models[querryCluster][bow_corpus_querry]
-querryScoresList = lda_models[querryCluster][bow_corpus_querry_tfidf]
+querryScoresList = lda_models[querryCluster][bow_corpus_querry]
 querryScores = {}
 for score in querryScoresList:
     querryScores[score[0]]=score[1]
